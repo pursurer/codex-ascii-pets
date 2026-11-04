@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ASCII Koi · Codex pet atlas</title>
+<style>
+@font-face { font-family: "Geist Mono"; font-weight: 100 900; font-style: normal; src: url("geist-mono.woff2") format("woff2"); }
+html, body { margin: 0; background: #444; }
+</style>
+<script src="pond.js"></script>
+</head>
+<body>
+<pre id="meta"></pre>
+<pre id="atlas"></pre>
+<script>
+(async () => {
+  const W = 192, H = 208, COLS = 8, ROWS = 9, N = 10;
+  const TAU = Math.PI * 2;
+  const Q = new URLSearchParams(location.search);
+  /* the knobs: body length when straight (px), and whether the caustic glints on the koi's back stay (frozen in time) */
+  const BODY = +(Q.get('body') || 140), GLINT = Q.get('glint') === '1';
+  const SP = { k: 1, glint: GLINT };
+  const palette = () => ({ water: '#0d1315', ink: '#ebe6dc', accent: '#e8784f', koiLight: '#ece6da', koiDark: '#3a3632', dark: true });
+  const canvas = document.createElement('canvas');
+  const pond = AsciiKoi.createPond({ canvas, palette, dpr: () => 1, sprite: SP });
+  await document.fonts.load('600 7px "Geist Mono"');
+  const fontOK = document.fonts.check('600 7px "Geist Mono"');
+  pond.size(W, H);
+  pond.reset();
+  const f = pond.fish[0];
+  const K0 = BODY / f.L0;
+  let curK = -1;
+
+  /*
+   * One pose: the body's centre at (cx, cy) px, heading a (radians, 0 = right, y down),
+   * bend(j) the turn at joint j (1..N-1) in radians, the engine's own tail wave (phase, beat),
+   * turn (fin bank) and scale.
+   */
+  function pose(p) {
+    const k = K0 * (p.scale || 1);
+    if (Math.abs(k - curK) > 1e-9) { SP.k = k; pond.size(W, H); curK = k; }
+    const nd = f.nodes;
+    let dir = p.a + Math.PI, x = 0, y = 0;
+    nd[0] = 0; nd[1] = 0;
+    for (let j = 1; j < N; j++) {
+      dir += p.bend ? p.bend(j) : 0;
+      x += Math.cos(dir) * f.seg; y += Math.sin(dir) * f.seg;
+      nd[j * 2] = x; nd[j * 2 + 1] = y;
+    }
+    /*
+     * p.a is the axis of the reference stretch of body (nodes ref[0] to ref[1], snout first), so bending the rest
+     * swings it about that stretch instead of turning the whole koi. The stretch sits where it would in a straight
+     * koi centred on (cx, cy), so every row shares one baseline.
+     */
+    const [i0, i1] = p.ref || [0, 4];
+    const want = p.a + Math.PI, got = Math.atan2(nd[i1 * 2 + 1] - nd[i0 * 2 + 1], nd[i1 * 2] - nd[i0 * 2]), rot = want - got, rc = Math.cos(rot), rs = Math.sin(rot);
+    for (let j = 1; j < N; j++) { const X = nd[j * 2], Y = nd[j * 2 + 1]; nd[j * 2] = X * rc - Y * rs; nd[j * 2 + 1] = X * rs + Y * rc; }
+    let mx = 0, my = 0;
+    for (let j = i0; j <= i1; j++) { mx += nd[j * 2]; my += nd[j * 2 + 1]; }
+    mx /= i1 - i0 + 1; my /= i1 - i0 + 1;
+    const lead = (4.5 - (i0 + i1) / 2) * f.seg * k, tx = p.cx + Math.cos(p.a) * lead, ty = p.cy + Math.sin(p.a) * lead;
+    f.nx = (tx - mx * k) / W; f.ny = (ty - my * k) / H;
+    f.a = p.a; f.phase = p.phase || 0; f.beat = p.beat == null ? 0.5 : p.beat; f.turn = p.turn || 0;
+    f.seen = 1; f.rise = 0; f.kick = 0; f.flee = 0; f.meal = null;
+    pond.render();
+    return canvas;
+  }
+
+  const CX = W / 2, CY = H / 2 + 6;
+  const env = j => (j / (N - 1));
+  const lerp = (a, b, e) => a + (b - a) * e;
+  /* travelling body wave, head to tail, growing toward the tail */
+  const wave = (amp, th, k = 0.85, pow = 1.4) => j => amp * Math.pow(env(j), pow) * Math.sin(th - j * k);
+
+  /* the rest pose: a gentle C, as idle frame 0, and where jumping settles */
+  const REST = { cx: CX, cy: CY, a: 0, bend: j => j <= 4 ? 0.035 : 0.06, phase: 0, beat: 0.05, turn: 0 };
+  const ROW = [
+    /* 0 idle: the head and body hold still in a gentle C; only the tail sways and the pectoral fins breathe */
+    { n: 6, fn: i => { const th = TAU * i / 6;
+      return { ...REST, bend: j => j <= 4 ? 0.035 : 0.06 + 0.05 * Math.sin(th - (j - 5) * 0.8), phase: th, turn: 0.25 * Math.sin(th) }; } },
+    /* 1 running-right: strong undulation along the whole body, surging a little forward and back */
+    { n: 8, fn: i => { const th = TAU * i / 8;
+      return { cx: CX + 4 * Math.sin(th), cy: CY + 1.5 * Math.sin(2 * th), a: 0.07 * Math.sin(th + 1.2), bend: wave(0.2, th), phase: 2 * th, beat: 1, turn: 0.6 * Math.sin(th) }; } },
+    /* 2 running-left: the same swim, head left, drawn by the engine */
+    { n: 8, fn: i => { const th = TAU * i / 8;
+      return { cx: CX - 4 * Math.sin(th), cy: CY + 1.5 * Math.sin(2 * th), a: Math.PI - 0.07 * Math.sin(th + 1.2), bend: wave(-0.2, th), phase: 2 * th, beat: 1, turn: -0.6 * Math.sin(th) }; } },
+    /* 3 waving: the body holds; the tail flicks up, down, up and settles, the pectoral fins flaring in turn */
+    { n: 4, fn: i => { const T = [0.32, -0.3, 0.24, 0.02][i];
+      return { cx: CX + 4, cy: CY, a: [0.03, -0.03, 0.02, 0][i], bend: j => (j <= 3 ? 0.03 : 0.04 + T * Math.pow((j - 3) / 6, 0.7)), phase: [0, 2, 4, 5.5][i], beat: 0.6, turn: [1, -1, 1, 0.2][i] }; } },
+    /* 4 jumping: anticipation, lift, peak, descent, settle; rising toward the surface the koi comes nearer and bigger */
+    { n: 5, fn: i => { if (i === 4) return { ...REST };
+      const S = [0.95, 1.03, 1.1, 1.05][i], Y = [7, -8, -16, -7][i], B = [0.12, 0.02, -0.03, 0.02][i];
+      return { cx: CX, cy: CY + Y, a: [0.06, -0.1, -0.04, 0.05][i], bend: j => B * (i === 0 ? Math.sin(j * 0.8 + 0.6) : 1), phase: [0, 1.6, 3.2, 4.4][i], beat: [0.2, 1, 0.6, 0.4][i], turn: [0, 0.8, 0.4, 0][i], scale: S }; } },
+    /* 5 failed: startled into a tight C, a shiver, then it uncurls, droops nose-down and deflates */
+    { n: 8, fn: i => { const C = [0.05, 0.3, 0.26, 0.3, 0.25, 0.1, 0.04, 0.03][i], J = [0, 2, -2, 1.5, -1, 0, 0, 0][i], droop = [0, 0, 0, 0, 0, 0.5, 0.9, 1][i];
+      return { cx: CX + J - 14 * (C > 0.2 ? 1 : 0), cy: CY - 8 * (C > 0.2 ? 1 : 0) + 6 * droop, a: 0.45 * droop + (C > 0.2 ? -0.15 : 0), bend: j => C, phase: 3 * i, beat: i < 5 ? 0.9 : 0, turn: i < 5 ? 1.2 * (i % 2 ? -1 : 1) : -0.3, scale: 1 - 0.05 * droop }; } },
+    /* 6 waiting: head up at the surface, as koi beg for food, bobbing for it */
+    { n: 6, fn: i => { const th = TAU * i / 6;
+      return { cx: CX, cy: CY - 4 + 3 * Math.cos(th), a: -Math.PI / 2 + 0.04 * Math.sin(th), bend: j => 0.03 * Math.sin(th - j * 0.6) * env(j), phase: th, beat: 0.4, turn: 0.9 * Math.sin(th), scale: 1 + 0.025 * Math.sin(th + 0.6) }; } },
+    /* 7 running: work in place; the body holds, the tail beats fast (two strokes a loop) */
+    { n: 6, fn: i => { const th = TAU * 2 * i / 6;
+      return { cx: CX, cy: CY, a: 0, bend: j => 0.02 + (j >= 5 ? 0.17 * Math.sin(th - (j - 5) * 0.9) : 0), phase: th, beat: 1, turn: 0.3 * Math.sin(th) }; } },
+    /* 8 review: the body holds; the head turns slowly one way, then the other, inspecting */
+    { n: 6, fn: i => { const th = TAU * i / 6, h = Math.sin(th);
+      return { cx: CX, cy: CY, a: 0, ref: [3, 8], bend: j => (j <= 3 ? -0.2 * h : 0.03), phase: th, beat: 0.1, turn: 0.4 * h }; } }
+  ];
+
+  const atlas = document.createElement('canvas');
+  atlas.width = W * COLS; atlas.height = H * ROWS;
+  const actx = atlas.getContext('2d');
+  ROW.forEach((row, r) => {
+    for (let i = 0; i < row.n; i++) actx.drawImage(pose(row.fn(i)), i * W, r * H);
+  });
+  document.getElementById('meta').textContent = JSON.stringify({ fontOK, L0: f.L0, K0, BODY, GLINT, depth: f.depth, variety: f.variety, colour: f.colour, cell: [canvas.width, canvas.height] });
+  document.getElementById('atlas').textContent = atlas.toDataURL('image/png');
+})().catch(e => { document.getElementById('meta').textContent = 'ERROR ' + e.stack; });
+</script>
+</body>
+</html>

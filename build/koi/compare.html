@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>page koi vs sprite koi</title>
+<style>@font-face { font-family: "Geist Mono"; font-weight: 100 900; font-style: normal; src: url("geist-mono.woff2") format("woff2"); }</style>
+<script src="pond-page.js"></script>
+<script>window.PageKoi = window.AsciiKoi;</script>
+<script src="pond.js"></script>
+</head>
+<body>
+<pre id="meta"></pre>
+<pre id="page"></pre>
+<pre id="sprite"></pre>
+<script>
+(async () => {
+  /* The real page's drawing code (pond-page.js, an unmodified copy) at a size where its own formula gives cw 7, ch 10,
+     and the sprite-mode copy at the same size and the same pond time, so fish 0 has the same pose, K and grid. */
+  const W = 600, H = 600, Q = new URLSearchParams(location.search), T = +(Q.get('t') || 7);
+  const palette = () => ({ water: '#0d1315', ink: '#ebe6dc', accent: '#e8784f', koiLight: '#ece6da', koiDark: '#3a3632', dark: true });
+  await document.fonts.load('600 7px "Geist Mono"');
+  const pc = document.createElement('canvas'), sc = document.createElement('canvas');
+  const page = PageKoi.createPond({ canvas: pc, palette, dpr: () => 1 });
+  const spr = AsciiKoi.createPond({ canvas: sc, palette, dpr: () => 1, sprite: { glint: Q.get('glint') === '1' } });
+  page.size(W, H); spr.size(W, H);
+  page.seek(T); spr.seek(T, false);
+  const a = page.fish[0], b = spr.fish[0];
+  for (const key of ['nx', 'ny', 'a', 'phase', 'beat', 'turn', 'rise', 'depth', 'seen']) b[key] = a[key];
+  b.nodes.set(a.nodes);
+  spr.render();
+  const K = 1.85 * Math.min(1, Math.max(0.62, W / 1000));
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (let j = 0; j < 10; j++) { const x = a.nx * W + a.nodes[j * 2] * K, y = a.ny * H + a.nodes[j * 2 + 1] * K; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  const pad = 70, box = [Math.max(0, Math.floor(x0 - pad)), Math.max(0, Math.floor(y0 - pad)), Math.min(W, Math.ceil(x1 + pad)), Math.min(H, Math.ceil(y1 + pad))];
+  const crop = c => { const o = document.createElement('canvas'); o.width = box[2] - box[0]; o.height = box[3] - box[1]; o.getContext('2d').drawImage(c, box[0], box[1], o.width, o.height, 0, 0, o.width, o.height); return o.toDataURL('image/png'); };
+  document.getElementById('page').textContent = crop(pc);
+  document.getElementById('sprite').textContent = crop(sc);
+  document.getElementById('meta').textContent = JSON.stringify({ T, K, box, L0: a.L0, others: page.fish.slice(1, 6).map(f => [Math.round(f.nx * W), Math.round(f.ny * H)]), head: [Math.round(a.nx * W), Math.round(a.ny * H)] });
+})().catch(e => { document.getElementById('meta').textContent = 'ERROR ' + e.stack; });
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "id": "ascii-koi",
+  "displayName": "ASCII Koi",
+  "description": "A red and white kohaku koi drawn in character cells by the ASCII Koi renderer.",
+  "spritesheetPath": "spritesheet.webp"
+}
