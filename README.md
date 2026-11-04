@@ -21,7 +21,7 @@ git clone https://github.com/pursurer/codex-ascii-pets.git
 mkdir -p ~/.codex/pets && cp -R codex-ascii-pets/pets/ascii-koi codex-ascii-pets/pets/ascii-cat ~/.codex/pets/
 ```
 
-Quit and reopen Codex, then choose **ASCII Koi** or **ASCII Cat** in its pet picker.
+In Codex, open Settings, go to the pets section, press Refresh, and choose **ASCII Koi** or **ASCII Cat**.
 
 Each pet is a folder with `pet.json` and `spritesheet.webp`: a Codex v1 atlas of 1536 × 1872 px, eight columns by nine rows of 192 × 208 px cells. The rows are idle, running right, running left, waving, jumping, failed, waiting, running (Codex is working) and review.
 
