@@ -1,5 +1,7 @@
 # Codex ASCII Pets
 
+> **Archived on 2026-11-04.** The black cat now lives in [Codex Koi](https://github.com/pursurer/codex-koi#the-black-cat), with its sprite atlas and the code that draws it. The koi pet is retired. The ASCII Koi family is [ASCII Koi](https://github.com/pursurer/ascii-koi) and its two apps, Codex Koi and [One Page is all you need](https://github.com/pursurer/one-page-is-all-you-need).
+
 **A koi and a black cat for the Codex desktop app, drawn in text characters.** The koi is one fish from the [ASCII Koi](https://github.com/pursurer/ascii-koi) pond. The cat is the little black cat from [One Page is all you need](https://github.com/pursurer/one-page-is-all-you-need). Each is drawn by its own project's code, not redrawn by hand.
 
 <p align="center">
